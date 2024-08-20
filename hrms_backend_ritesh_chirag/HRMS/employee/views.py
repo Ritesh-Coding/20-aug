@@ -15,7 +15,7 @@ from .serializers import LatestActivitiesSerializer,EmployeeRelationSerializer,D
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django_filters.rest_framework import DjangoFilterBackend
-
+from authApp.serializers import EmployeeSerializer
 from authApp.models import Employee
 from django.db.models import Q
 
@@ -124,44 +124,68 @@ class LatestEmployeeActivity(viewsets.ModelViewSet):
 class EmployeeActivity(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.AllowAny]
-    serializer_class = EmployeeDailyActivitiesSerializer      
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['employee_id_id','status_time','status']
+    
     def get_queryset(self): 
         today = datetime.today()
-        id = self.request.query_params.get('id', None)      
+        id = self.request.query_params.get('id', None)
+        status = self.request.query_params.get('status', None)
+        
+        # Superuser: Filter by ID or return all activities
         if self.request.user.is_superuser:
             if id:
-                queryset =  TodaysEmployeeActivity.objects.filter(employee_id=id,
-                                                             status_time__year=today.year,
-                                                    status_time__month=today.month,                                                    
-                                                    ).order_by("-status_time")
-                if date:
-                    queryset = queryset.filter(status_time__date=date)
-              
+                queryset = TodaysEmployeeActivity.objects.filter(
+                    employee_id=id,
+                    status_time__year=today.year,
+                    status_time__month=today.month
+                ).order_by("-status_time")
                 return queryset
-            else:
-                queryset =  TodaysEmployeeActivity.objects.all()
-                return queryset
+            return TodaysEmployeeActivity.objects.all()
+        
+        # For other users:
+        if status == "offline":
+            # Fetch employees without any activity today
+            offline_employee_ids = Employee.objects.exclude(
+                id__in=TodaysEmployeeActivity.objects.filter(
+                    status_time__date=today
+                ).values_list('employee_id', flat=True)
+            ).values_list('id', flat=True)
+            
+            queryset = Employee.objects.filter(id__in=offline_employee_ids)
+            return queryset
+        
+        elif status == "Break In":
+            # Filter by employees currently on break
+            queryset = TodaysEmployeeActivity.objects.filter(
+                is_break=True,
+                status_time__year=today.year,
+                status_time__month=today.month,
+                status_time__day=today.day
+            ).order_by("-status_time")
+            return queryset
+        
         else:
-            status = self.request.query_params.get('status', None)
-          
+            # General activity filtering
             queryset = TodaysEmployeeActivity.objects.filter(
                 status_time__year=today.year,
                 status_time__month=today.month,
                 status_time__day=today.day
-            ).order_by("-status_time")    
-            search_query = self.request.query_params.get('search', None)        
-
-            if status==("Break In"):                
-                queryset = queryset.filter(is_break=True)            
+            ).order_by("-status_time")
             
-                
+            search_query = self.request.query_params.get('search', None)
             if search_query:
                 queryset = queryset.filter(
                     Q(first_name__icontains=search_query) | Q(last_name__icontains=search_query)
                 )
             return queryset
+
+    def get_serializer_class(self):
+        # Use a different serializer when dealing with Employees (offline case)
+        status = self.request.query_params.get('status', None)
+        if status == "offline":
+            return EmployeeSerializer  
+        return EmployeeDailyActivitiesSerializer
+
         
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
@@ -231,16 +255,7 @@ class DashboardAttendance(viewsets.ModelViewSet):
             self.permission_classes = [permissions.IsAdminUser]
         else:
             self.permission_classes = [permissions.AllowAny]
-        return super().get_permissions()
-
-class  UpdateAttendanceReport(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAdminUser]
-    serializer_class = UpdateAttendanceSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['date']
-    queryset = DailyAttendanceReport.objects.all()
-   
+        return super().get_permissions()  
 
 
 #created By Ritesh

@@ -42,17 +42,17 @@ class LatestActivitiesSerializer(serializers.ModelSerializer):
     
 #created By Ritesh
 class EmployeeDailyActivitiesSerializer(serializers.ModelSerializer):
-    profileImage = serializers.SerializerMethodField()
-    designation = serializers.SerializerMethodField()
-    class Meta:
-        model = TodaysEmployeeActivity
-        fields = ['id','first_name','last_name','profileImage','designation']
+        profileImage = serializers.SerializerMethodField()
+        designation = serializers.SerializerMethodField()
+        class Meta:
+            model = TodaysEmployeeActivity
+            fields = ['id','first_name','last_name','profileImage','designation',"status","status_time"]
 
-    def get_designation(self,obj):
-        return CompanyRelations.objects.filter(id=obj.employee_id_id).values("designation","department")
-    
-    def get_profileImage(self,obj):
-        return Employee.objects.filter(id=obj.employee_id_id).values("profile","bio")
+        def get_designation(self,obj):
+            return CompanyRelations.objects.filter(id=obj.id).values("designation","department")
+        
+        def get_profileImage(self,obj):
+            return Employee.objects.filter(id=obj.id).values("profile","bio","first_name","last_name")
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model=Employee
