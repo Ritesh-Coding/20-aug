@@ -44,24 +44,21 @@ const Hotline: React.FC = () => {
       setEmployee(res.data)        
     })       
   };
-  const fetchOfflineEmployee = (search: string | undefined, status: string | undefined)=>{
-    appClient.get("hotline/",{
-      params : { 
-        status,
-      }
-    }       
-    ).then((res) => {    
-      setEmployee(res.data)        
-    })   
-  }
+  // const fetchOfflineEmployee = (search: string | undefined, status: string | undefined)=>{
+  //   appClient.get("hotline/",{
+  //     params : { 
+  //       status,
+  //     }
+  //   }       
+  //   ).then((res) => {    
+  //     setEmployee(res.data)        
+  //   })   
+  // }
 
   useEffect(() => { 
-    if(status=="offline"){
-      fetchOfflineEmployee(search,status)
-    }
-    else{
+   
       fetchEmployee(search,status);
-    }
+    
   }, [status]);
   
   
@@ -97,12 +94,12 @@ const Hotline: React.FC = () => {
       {employee.map((emp, index) => (
         <div key={index}>
           <div className="card" style={{ width: `18rem` }}>
-           
+           {emp["profileImage"][0]  && 
             <img
               className="card-img-top"
               src={`http://127.0.0.1:8000/media/${emp["profileImage"][0]["profile"]}`}
               alt="No Employees Available"
-            />
+            />}
             <div className="card-body">
             
             <p>{emp && emp["first_name"]} {emp["last_name"]}</p>

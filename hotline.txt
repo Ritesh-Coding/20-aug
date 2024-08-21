@@ -1,0 +1,89 @@
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+
+class Employee(AbstractUser):
+    dob = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')], null=True, blank=True)
+    relationship_status = models.CharField(max_length=20, null=True, blank=True)
+    bio = models.TextField(null=True, blank=True)
+    date_of_joining = models.DateField(null=True, blank=True)
+    phone_number = models.CharField(max_length=15, null=True, blank=True)
+    address = models.TextField(null=True, blank=True)
+    profile = models.ImageField(blank=True, null=True, upload_to="images/")
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} {self.id}"
+
+class TodaysEmployeeActivity(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='activities')
+    first_name = models.CharField(blank=True, null=True)
+    last_name = models.CharField(blank=True, null=True)
+    status = models.CharField(blank=True, null=True)
+    status_time = models.DateTimeField()
+    is_break = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.IntegerField(default=0)
+
+
+
+from rest_framework import serializers
+
+class EmployeeDailyActivitiesSerializer(serializers.ModelSerializer):
+    profileImage = serializers.SerializerMethodField()
+    designation = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TodaysEmployeeActivity
+        fields = ['id', 'first_name', 'last_name', 'status', 'status_time', 'is_break', 'profileImage', 'designation']
+
+    def get_profileImage(self, obj):
+        return obj.employee.profile.url if obj.employee.profile else None
+
+    def get_designation(self, obj):
+        # Assuming CompanyRelations model exists and is related to Employee
+        return CompanyRelations.objects.filter(id=obj.employee_id_id).values("designation", "department")
+
+
+from rest_framework import viewsets, permissions
+from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
+from django.db.models import Q, Max
+
+class EmployeeActivityViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.AllowAny]
+    serializer_class = EmployeeDailyActivitiesSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['employee_id', 'status_time', 'status']
+
+    def get_queryset(self):
+        today = timezone.now().date()
+        status = self.request.query_params.get('status', None)
+        
+        if status == "checked_in":
+            queryset = TodaysEmployeeActivity.objects.filter(
+                status_time__date=today
+            ).distinct()
+        
+        elif status == "break_in":
+            latest_activities = TodaysEmployeeActivity.objects.filter(
+                status_time__date=today
+            ).order_by('employee', '-status_time').distinct('employee')
+
+            queryset = latest_activities.filter(status="Break In")
+        
+        elif status == "offline":
+            offline_employee_ids = Employee.objects.exclude(
+                id__in=TodaysEmployeeActivity.objects.filter(
+                    status_time__date=today
+                ).values_list('employee_id', flat=True)
+            ).values_list('id', flat=True)
+
+            queryset = Employee.objects.filter(id__in=offline_employee_ids)
+        
+        else:
+            queryset = TodaysEmployeeActivity.objects.filter(
+                status_time__date=today
+            ).order_by("-status_time")
+
+        return queryset
